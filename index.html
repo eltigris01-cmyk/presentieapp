@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Presentie">
+<title>Presentie</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
+<style>
+  :root{
+    --bg:#1b1f19; --bg-raised:#23281f; --bg-card:#2a3024; --line:#3a4132;
+    --khaki:#9caf6b; --khaki-dim:#6e7d4d; --ink:#eceadd; --ink-dim:#a8ab98;
+    --ok:#6fae5f; --ok-bg:#223420; --absent:#c1594a; --absent-bg:#382220;
+    --warn:#d3a441; --warn-bg:#3a3120;
+    --radius:14px; --mono:"SF Mono","Menlo",monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom);}
+  header{position:sticky;top:0;z-index:20;background:var(--bg);padding:calc(env(safe-area-inset-top) + 14px) 18px 12px;border-bottom:1px solid var(--line);}
+  header .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--khaki);text-transform:uppercase;margin-bottom:2px;}
+  header h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em;}
+  header .sub{color:var(--ink-dim);font-size:13px;margin-top:2px;}
+  main{padding:16px 16px 100px;}
+  .screen{display:none;} .screen.active{display:block;}
+  .card{background:var(--bg-raised);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px;}
+  .fab{position:fixed;right:18px;bottom:calc(24px + env(safe-area-inset-bottom));background:var(--khaki);color:#182014;border:none;width:56px;height:56px;border-radius:50%;font-size:28px;font-weight:600;line-height:56px;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.4);z-index:30;}
+  .fab:active{transform:scale(.94);}
+  nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:25;display:flex;background:var(--bg-raised);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);}
+  nav.tabs button{flex:1;background:none;border:none;color:var(--ink-dim);font-size:10.5px;padding:9px 2px 7px;font-family:inherit;}
+  nav.tabs button .ic{display:block;font-size:18px;margin-bottom:2px;}
+  nav.tabs button.active{color:var(--khaki);}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line);}
+  .row:last-child{border-bottom:none;}
+  .row .name{font-weight:600;} .row .meta{font-size:12px;color:var(--ink-dim);margin-top:2px;}
+  .status-btn{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border:none;border-radius:999px;padding:8px 14px;min-width:92px;text-align:center;}
+  .status-btn.aanwezig{background:var(--ok-bg);color:var(--ok);}
+  .status-btn.afwezig{background:var(--absent-bg);color:var(--absent);}
+  .status-btn.locked{opacity:.55;}
+  .reason-chip{display:inline-block;margin-top:4px;font-size:12px;color:var(--absent);background:var(--absent-bg);padding:3px 9px;border-radius:8px;}
+  input[type=text],input[type=email],input[type=password],input[type=date],select,textarea{width:100%;background:var(--bg-card);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:11px 12px;font-size:15px;font-family:inherit;}
+  label{font-size:12px;color:var(--ink-dim);display:block;margin:12px 0 5px;} label:first-child{margin-top:0;}
+  .btn{display:block;width:100%;text-align:center;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:600;font-family:inherit;margin-top:14px;}
+  .btn.primary{background:var(--khaki);color:#182014;}
+  .btn.ghost{background:none;border:1px solid var(--line);color:var(--ink-dim);}
+  .btn.danger{background:none;border:1px solid var(--absent);color:var(--absent);}
+  .btn.small{width:auto;display:inline-block;margin:0;padding:7px 12px;font-size:13px;}
+  .empty{color:var(--ink-dim);font-size:14px;text-align:center;padding:40px 10px;}
+  .empty .big{font-size:32px;display:block;margin-bottom:8px;}
+  .backbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .backbar button{background:none;border:none;color:var(--khaki);font-size:15px;padding:0;font-family:inherit;}
+  .backbar h2{font-size:17px;margin:0;flex:1;}
+  .summary{display:flex;gap:10px;margin-bottom:14px;}
+  .summary .box{flex:1;background:var(--bg-card);border-radius:10px;padding:10px;text-align:center;}
+  .summary .box b{display:block;font-size:20px;} .summary .box.ok b{color:var(--ok);} .summary .box.absent b{color:var(--absent);}
+  .summary .box span{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.04em;}
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto;}
+  .sheet{background:var(--bg-raised);width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:18px 18px calc(20px + env(safe-area-inset-bottom));border:1px solid var(--line);border-bottom:none;}
+  .sheet h3{margin:0 0 12px;font-size:16px;}
+  .chiplist{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;}
+  .chiplist button{font-family:inherit;font-size:13px;background:var(--bg-card);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:8px 13px;}
+  .chiplist button.selected{background:var(--khaki);color:#182014;border-color:var(--khaki);}
+  .radio-row{display:flex;gap:16px;margin:10px 0;font-size:13px;color:var(--ink-dim);}
+  .radio-row label{display:flex;align-items:center;gap:6px;margin:0;color:var(--ink-dim);font-size:13px;}
+  #toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:var(--khaki);color:#182014;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .25s;z-index:80;max-width:88vw;text-align:center;}
+  #toast.show{opacity:1;}
+  .unit-node{margin-left:0;}
+  .unit-node .unit-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);}
+  .unit-node .unit-name{font-weight:700;}
+  .unit-node .unit-type{font-family:var(--mono);font-size:10px;color:var(--khaki);text-transform:uppercase;letter-spacing:.06em;}
+  .unit-children{margin-left:16px;border-left:1px dashed var(--line);padding-left:12px;}
+  .tag{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.05em;background:var(--bg-card);color:var(--ink-dim);border-radius:6px;padding:3px 7px;}
+  .tag.role-admin{color:var(--warn);background:var(--warn-bg);}
+  .statbar-wrap{margin-bottom:14px;}
+  .statbar-label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;}
+  .statbar-track{background:var(--bg-card);border-radius:8px;height:10px;overflow:hidden;}
+  .statbar-fill{background:var(--khaki);height:100%;}
+  .login-wrap{padding:60px 24px;max-width:420px;margin:0 auto;}
+  .login-wrap h1{text-align:center;font-size:24px;}
+  .login-wrap .sub{text-align:center;color:var(--ink-dim);margin-bottom:24px;}
+  .segmented{display:flex;background:var(--bg-card);border-radius:10px;padding:3px;margin-bottom:14px;}
+  .segmented button{flex:1;background:none;border:none;color:var(--ink-dim);padding:8px;border-radius:8px;font-family:inherit;font-size:13px;}
+  .segmented button.active{background:var(--khaki);color:#182014;font-weight:600;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<section id="screen-login" class="screen active">
+  <div class="login-wrap">
+    <h1>🪖 Presentie</h1>
+    <div class="sub">Log in met je account</div>
+    <div class="segmented">
+      <button id="loginModeLogin" class="active" onclick="setAuthMode('login')">Inloggen</button>
+      <button id="loginModeReset" onclick="setAuthMode('reset')">Wachtwoord vergeten</button>
+    </div>
+    <label>E-mailadres</label>
+    <input type="email" id="loginEmail" placeholder="jij@voorbeeld.nl">
+    <div id="loginPasswordWrap">
+      <label>Wachtwoord</label>
+      <input type="password" id="loginPassword">
+    </div>
+    <button class="btn primary" id="loginSubmitBtn" onclick="submitAuth()">Inloggen</button>
+    <div id="loginError" style="color:var(--absent);font-size:13px;margin-top:10px;text-align:center;"></div>
+  </div>
+</section>
+
+<!-- APP -->
+<div id="appRoot" style="display:none;">
+<header>
+  <div class="eyebrow" id="headerEyebrow">PRESENTIE</div>
+  <h1 id="headerTitle">Opkomsten</h1>
+  <div class="sub" id="headerSub">&nbsp;</div>
+</header>
+
+<main>
+  <section class="screen active" id="screen-opkomsten"><div id="opkomstenList"></div></section>
+
+  <section class="screen" id="screen-detail">
+    <div class="backbar">
+      <button onclick="goTo('opkomsten')">&larr; Terug</button>
+      <h2 id="detailTitle"></h2>
+      <button onclick="showDetailMenu()" style="color:var(--ink-dim);font-size:20px;">&#8942;</button>
+    </div>
+    <div id="detailStatusBanner"></div>
+    <div class="summary" id="detailSummary"></div>
+    <div id="detailTree"></div>
+    <div id="detailAddMissing"></div>
+    <button class="btn ghost" onclick="openMailSheet()">📧 Mail overzicht</button>
+  </section>
+
+  <section class="screen" id="screen-personeel">
+    <div id="personeelUnits"></div>
+  </section>
+
+  <section class="screen" id="screen-stats">
+    <label>Periode van</label>
+    <input type="date" id="statsFrom">
+    <label>tot en met</label>
+    <input type="date" id="statsTo">
+    <button class="btn primary" onclick="renderStats()">Bereken</button>
+    <div id="statsOutput" style="margin-top:16px;"></div>
+  </section>
+
+  <section class="screen" id="screen-instellingen">
+    <div id="instellingenContent"></div>
+  </section>
+</main>
+
+<div class="fab" id="fab" onclick="onFab()">+</div>
+
+<nav class="tabs">
+  <button class="active" data-tab="opkomsten" onclick="switchTab('opkomsten')"><span class="ic">📋</span>Opkomsten</button>
+  <button data-tab="personeel" onclick="switchTab('personeel')"><span class="ic">👥</span>Personeel</button>
+  <button data-tab="stats" onclick="switchTab('stats')"><span class="ic">📊</span>Statistieken</button>
+  <button data-tab="instellingen" onclick="switchTab('instellingen')"><span class="ic">⚙️</span>Instellingen</button>
+</nav>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* =========================================================
+   CONFIGURATIE — vul dit in met jouw eigen gegevens
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyArC0yblcyu8Es4cOb9RTy0kp6JvDDORng",
+  authDomain: "presentie-app-9ef4e.firebaseapp.com",
+  projectId: "presentie-app-9ef4e",
+  storageBucket: "presentie-app-9ef4e.firebasestorage.app",
+  messagingSenderId: "434793755724",
+  appId: "1:434793755724:web:509ff0d8bd1ccedc3470e9"
+};
+const EMAILJS_PUBLIC_KEY  = "PLAK_HIER_EMAILJS_PUBLIC_KEY";
+const EMAILJS_SERVICE_ID  = "PLAK_HIER_EMAILJS_SERVICE_ID";
+const EMAILJS_TEMPLATE_ID = "PLAK_HIER_EMAILJS_TEMPLATE_ID";
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+// tweede, losse app-instantie zodat admin nieuwe gebruikers kan aanmaken
+// zonder zelf uitgelogd te raken
+const secondaryApp = firebase.initializeApp(firebaseConfig, "secondary");
+try{ emailjs.init({publicKey: EMAILJS_PUBLIC_KEY}); }catch(e){}
+
+/* =========================================================
+   STATE
+   ========================================================= */
+let me = null;            // firebase auth user
+let myProfile = null;     // users/{uid} doc
+let units = [];           // alle eenheden
+let personen = [];        // alle personen
+let redenen = [];         // globale redenenlijst
+let opkomsten = [];       // alle opkomsten
+let allUsers = [];        // alle gebruikersprofielen (voor beheerder-toewijzing)
+let currentTab = 'opkomsten';
+let currentOpkomstId = null;
+let authMode = 'login';
+let unsubs = [];
+
+const RANG_ORDER = ['officier','onderofficier','manschap'];
+const RANG_LABEL = {officier:'Officier', onderofficier:'Onderofficier', manschap:'Manschap'};
+
+/* =========================================================
+   AUTH
+   ========================================================= */
+function setAuthMode(mode){
+  authMode = mode;
+  document.getElementById('loginModeLogin').classList.toggle('active', mode==='login');
+  document.getElementById('loginModeReset').classList.toggle('active', mode==='reset');
+  document.getElementById('loginPasswordWrap').style.display = mode==='login' ? 'block' : 'none';
+  document.getElementById('loginSubmitBtn').textContent = mode==='login' ? 'Inloggen' : 'Verstuur reset-link';
+  document.getElementById('loginError').textContent = '';
+}
+function submitAuth(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if(!email){ errEl.textContent = 'Vul een e-mailadres in'; return; }
+  if(authMode==='reset'){
+    auth.sendPasswordResetEmail(email)
+      .then(()=>{ toast('Reset-mail verstuurd, check je inbox'); setAuthMode('login'); })
+      .catch(e=>errEl.textContent = vertaalAuthError(e));
+    return;
+  }
+  const pass = document.getElementById('loginPassword').value;
+  if(!pass){ errEl.textContent = 'Vul je wachtwoord in'; return; }
+  auth.signInWithEmailAndPassword(email, pass).catch(e=>errEl.textContent = vertaalAuthError(e));
+}
+function vertaalAuthError(e){
+  const c = e.code || '';
+  if(c.includes('user-not-found') || c.includes('invalid-credential') || c.includes('wrong-password')) return 'E-mailadres of wachtwoord onjuist.';
+  if(c.includes('too-many-requests')) return 'Te veel pogingen, probeer later opnieuw.';
+  if(c.includes('invalid-email')) return 'Ongeldig e-mailadres.';
+  return e.message || 'Er ging iets mis.';
+}
+function logout(){ auth.signOut(); }
+
+auth.onAuthStateChanged(async user=>{
+  unsubs.forEach(u=>u()); unsubs = [];
+  if(!user){
+    me = null; myProfile = null;
+    document.getElementById('screen-login').classList.add('active');
+    document.getElementById('appRoot').style.display = 'none';
+    return;
+  }
+  me = user;
+  document.getElementById('screen-login').classList.remove('active');
+  document.getElementById('appRoot').style.display = 'block';
+  await ensureUserProfile();
+  attachListeners();
+});
+
+async function ensureUserProfile(){
+  const ref = db.collection('users').doc(me.uid);
+  const snap = await ref.get();
+  if(!snap.exists){
+    await ref.set({ email: me.email, naam: me.email.split('@')[0], rol: 'beheerder', voorkeurEmail: '' });
+  }
+}
+
+/* =========================================================
+   REALTIME LISTENERS
+   ========================================================= */
+function attachListeners(){
+  unsubs.push(db.collection('users').doc(me.uid).onSnapshot(s=>{
+    myProfile = s.data();
+    renderHeaderRole();
+    rerenderCurrentScreen();
+  }));
+  unsubs.push(db.collection('units').onSnapshot(s=>{
+    units = s.docs.map(d=>({id:d.id, ...d.data()}));
+    rerenderCurrentScreen();
+  }));
+  unsubs.push(db.collection('personen').onSnapshot(s=>{
+    personen = s.docs.map(d=>({id:d.id, ...d.data()}));
+    rerenderCurrentScreen();
+  }));
+  unsubs.push(db.collection('opkomsten').onSnapshot(s=>{
+    opkomsten = s.docs.map(d=>({id:d.id, ...d.data()}));
+    rerenderCurrentScreen();
+  }));
+  unsubs.push(db.doc('instellingen/redenen').onSnapshot(s=>{
+    redenen = (s.exists && s.data().lijst) ? s.data().lijst : [];
+  }));
+  unsubs.push(db.collection('users').onSnapshot(s=>{
+    allUsers = s.docs.map(d=>({id:d.id, ...d.data()}));
+  }));
+}
+function rerenderCurrentScreen(){
+  if(currentTab==='opkomsten' && !currentOpkomstId) renderOpkomsten();
+  if(currentTab==='opkomsten' && currentOpkomstId) renderDetail();
+  if(currentTab==='personeel') renderPersoneel();
+  if(currentTab==='instellingen') renderInstellingen();
+}
+function renderHeaderRole(){
+  // niets verplicht hier, ruimte voor toekomstige badge
+}
+
+/* =========================================================
+   NAVIGATIE
+   ========================================================= */
+function switchTab(tab){
+  currentTab = tab; currentOpkomstId = null;
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  goTo(tab);
+}
+function goTo(screen){
+  document.querySelectorAll('#appRoot .screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+screen).classList.add('active');
+  document.getElementById('fab').style.display = (screen==='opkomsten') ? 'block' : 'none';
+  if(screen==='opkomsten'){ headerSet('PRESENTIE','Opkomsten','Overzicht van opkomsten'); renderOpkomsten(); }
+  if(screen==='personeel'){ headerSet('BEHEER','Personeel','Militairen per eenheid'); renderPersoneel(); }
+  if(screen==='stats'){ headerSet('INZICHT','Statistieken','Opkomstpercentages'); initStatsDefaults(); }
+  if(screen==='instellingen'){ headerSet('BEHEER','Instellingen','Organisatie, rollen & voorkeuren'); renderInstellingen(); }
+  if(screen==='detail'){ headerSet('OPKOMST', getOpkomst()?.naam || '', ''); renderDetail(); }
+}
+function headerSet(eyebrow,title,sub){
+  document.getElementById('headerEyebrow').textContent = eyebrow;
+  document.getElementById('headerTitle').textContent = title;
+  document.getElementById('headerSub').textContent = sub;
+}
+function onFab(){ if(currentTab==='opkomsten' && !currentOpkomstId) openNieuweOpkomstSheet(); }
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
+
+/* =========================================================
+   ORGANISATIE-HELPERS (boomstructuur)
+   ========================================================= */
+function unitById(id){ return units.find(u=>u.id===id); }
+function childrenOf(parentId){ return units.filter(u=>(u.parentId||null)===(parentId||null)); }
+function rootUnits(){ return childrenOf(null); }
+function getSubtreeUnitIds(rootId){
+  const result = [rootId];
+  childrenOf(rootId).forEach(c=>{ result.push(...getSubtreeUnitIds(c.id)); });
+  return result;
+}
+function getAncestorChain(unitId){
+  const chain = []; let cur = unitById(unitId); let guard=0;
+  while(cur && guard<12){ chain.push(cur.id); if(!cur.parentId) break; cur = unitById(cur.parentId); guard++; }
+  return chain;
+}
+function directPersonsOf(unitId){ return personen.filter(p=>p.unitId===unitId); }
+function allPersonsInSubtree(rootId){
+  const ids = getSubtreeUnitIds(rootId);
+  return personen.filter(p=>ids.includes(p.unitId));
+}
+// units waar ik zelf rechtstreeks beheerder van ben ("eigen niveau")
+function myDirectUnitIds(){
+  if(!me) return [];
+  return units.filter(u=>Array.isArray(u.beheerders) && u.beheerders.includes(me.uid)).map(u=>u.id);
+}
+function isAdmin(){ return myProfile && myProfile.rol==='admin'; }
+function canEditUnit(unitId){ return isAdmin() || myDirectUnitIds().includes(unitId); }
+// units die ik kan "zien + opkomst voor starten" = mijn eigen units + alles daaronder
+function myManageableScopeUnitIds(){
+  if(isAdmin()) return units.map(u=>u.id);
+  const mine = myDirectUnitIds();
+  const scope = new Set();
+  mine.forEach(id=>getSubtreeUnitIds(id).forEach(x=>scope.add(x)));
+  return Array.from(scope);
+}
+function unitPath(unitId){
+  const chain = getAncestorChain(unitId).reverse();
+  return chain.map(id=>unitById(id)?.naam || '?').join(' › ');
+}
+
+/* =========================================================
+   RANG-TELLINGEN "O/OO/M"
+   ========================================================= */
+function rangCounts(personsList, attendanceMap){
+  const counts = {officier:0, onderofficier:0, manschap:0};
+  personsList.forEach(p=>{
+    const a = attendanceMap[p.id];
+    if(a && a.status==='aanwezig') counts[p.rang] = (counts[p.rang]||0)+1;
+  });
+  return RANG_ORDER.map(r=>counts[r]||0).join('/');
+}
+function rangTotalLabel(personsList){
+  const counts = {officier:0, onderofficier:0, manschap:0};
+  personsList.forEach(p=>{ counts[p.rang]=(counts[p.rang]||0)+1; });
+  return RANG_ORDER.map(r=>counts[r]||0).join('/');
+}
+
+/* =========================================================
+   OPKOMSTEN — lijst
+   ========================================================= */
+function renderOpkomsten(){
+  const el = document.getElementById('opkomstenList');
+  const scope = myManageableScopeUnitIds();
+  const zichtbaar = opkomsten.filter(o=>scope.includes(o.scopeUnitId) || isAdmin() || getAncestorChain(o.scopeUnitId).some(a=>scope.includes(a)));
+  if(zichtbaar.length===0){
+    el.innerHTML = `<div class="empty"><span class="big">🪖</span>Nog geen opkomst.<br>Tik op + om te beginnen.</div>`;
+    return;
+  }
+  const sorted = zichtbaar.slice().sort((a,b)=> (b.datum||'').localeCompare(a.datum||''));
+  el.innerHTML = sorted.map(ok=>{
+    const persons = allPersonsInSubtree(ok.scopeUnitId).filter(p=>ok.aanwezigheid && ok.aanwezigheid[p.id]);
+    const counts = rangCounts(persons, ok.aanwezigheid||{});
+    const gesloten = ok.status==='gesloten';
+    return `<div class="card" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="openOpkomst('${ok.id}')">
+      <div>
+        <div style="font-weight:600;font-size:16px;">${esc(ok.naam)} ${gesloten?'<span class="tag" style="margin-left:6px;">gesloten</span>':''}</div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--khaki);margin-top:2px;">${fmtDate(ok.datum)} · ${esc(unitPath(ok.scopeUnitId))}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:var(--mono);font-size:13px;">${counts}</div>
+        <div style="font-size:10px;color:var(--ink-dim);">O/OO/M</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function openOpkomst(id){ currentOpkomstId = id; currentTab='opkomsten'; goTo('detail'); }
+function getOpkomst(){ return opkomsten.find(o=>o.id===currentOpkomstId); }
+
+/* -------- nieuwe opkomst aanmaken -------- */
+function openNieuweOpkomstSheet(){
+  const scopeIds = isAdmin() ? units.map(u=>u.id) : myDirectUnitIds();
+  if(scopeIds.length===0){ toast('Je beheert nog geen eenheid. Vraag de systeembeheerder je toe te wijzen.'); return; }
+  const todayStr = new Date().toISOString().slice(0,10);
+  const overlay = document.createElement('div'); overlay.className='overlay'; overlay.id='newOkOverlay';
+  overlay.innerHTML = `
+    <div class="sheet">
+      <h3>Nieuwe opkomst</h3>
+      <label>Naam</label><input type="text" id="newOkNaam" value="Opkomst">
+      <label>Datum</label><input type="date" id="newOkDatum" value="${todayStr}">
+      <label>Voor welke eenheid?</label>
+      <select id="newOkUnit">${scopeIds.map(id=>`<option value="${id}">${esc(unitPath(id))}</option>`).join('')}</select>
+      <label>Militairen (vink uit wie je wilt overslaan)</label>
+      <div id="newOkPersonsWrap" style="max-height:34vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:4px 12px;"></div>
+      <button class="btn primary" onclick="confirmNieuweOpkomst()">Opkomst aanmaken</button>
+      <button class="btn ghost" onclick="closeOverlay('newOkOverlay')">Annuleren</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('newOkUnit').addEventListener('change', renderNewOkPersons);
+  renderNewOkPersons();
+}
+function renderNewOkPersons(){
+  const unitId = document.getElementById('newOkUnit').value;
+  const persons = allPersonsInSubtree(unitId);
+  const wrap = document.getElementById('newOkPersonsWrap');
+  if(persons.length===0){ wrap.innerHTML = `<div class="empty" style="padding:16px 0;">Geen militairen in deze eenheid.</div>`; return; }
+  wrap.innerHTML = persons.map((p,i)=>`
+    <label style="display:flex;align-items:center;gap:10px;margin:0;padding:9px 0;color:var(--ink);font-size:14px;${i<persons.length-1?'border-bottom:1px solid var(--line);':''}">
+      <input type="checkbox" class="newOkCheck" value="${p.id}" checked style="width:auto;">
+      ${esc(p.naam)} <span class="tag">${RANG_LABEL[p.rang]}</span> <span style="color:var(--ink-dim);font-size:12px;">${esc(unitById(p.unitId)?.naam||'')}</span>
+    </label>`).join('');
+}
+function confirmNieuweOpkomst(){
+  const naam = document.getElementById('newOkNaam').value.trim() || 'Opkomst';
+  const datum = document.getElementById('newOkDatum').value || new Date().toISOString().slice(0,10);
+  const scopeUnitId = document.getElementById('newOkUnit').value;
+  const checked = Array.from(document.querySelectorAll('.newOkCheck:checked')).map(c=>c.value);
+  const aanwezigheid = {};
+  checked.forEach(id=>{ aanwezigheid[id] = {status:'aanwezig', reden:null}; });
+  db.collection('opkomsten').add({
+    naam, datum, scopeUnitId, status:'open', aangemaaktDoor: me.uid, aanwezigheid
+  }).then(()=>{ closeOverlay('newOkOverlay'); toast('Opkomst aangemaakt'); }).catch(e=>toast('Fout: '+e.message));
+}
+function closeOverlay(id){ const o=document.getElementById(id); if(o) o.remove(); }
+
+/* -------- detail van een opkomst -------- */
+function renderDetail(){
+  const ok = getOpkomst();
+  if(!ok){ goTo('opkomsten'); return; }
+  document.getElementById('detailTitle').textContent = ok.naam + ' · ' + fmtDate(ok.datum);
+
+  const banner = document.getElementById('detailStatusBanner');
+  banner.innerHTML = ok.status==='gesloten'
+    ? `<div class="card" style="background:var(--warn-bg);border-color:var(--warn);color:var(--warn);font-size:13px;">🔒 Deze opkomst is definitief gemaakt. Wijzigen kan alleen via de systeembeheerder.</div>`
+    : '';
+
+  const allIds = Object.keys(ok.aanwezigheid||{});
+  const allPersonsHere = allIds.map(id=>personen.find(p=>p.id===id)).filter(Boolean);
+  document.getElementById('detailSummary').innerHTML = `
+    <div class="box ok"><b>${allPersonsHere.filter(p=>ok.aanwezigheid[p.id].status==='aanwezig').length}</b><span>Aanwezig</span></div>
+    <div class="box absent"><b>${allPersonsHere.filter(p=>ok.aanwezigheid[p.id].status==='afwezig').length}</b><span>Afwezig</span></div>
+    <div class="box"><b>${rangCounts(allPersonsHere, ok.aanwezigheid)}</b><span>O/OO/M aanw.</span></div>`;
+
+  const treeEl = document.getElementById('detailTree');
+  treeEl.innerHTML = renderOpkomstUnitBlock(ok, ok.scopeUnitId, ok.status==='gesloten');
+
+  const scopeAll = getSubtreeUnitIds(ok.scopeUnitId);
+  const inScopePersons = personen.filter(p=>scopeAll.includes(p.unitId));
+  const missing = inScopePersons.filter(p=>!ok.aanwezigheid || !ok.aanwezigheid[p.id]);
+  const addEl = document.getElementById('detailAddMissing');
+  const editableMissing = missing.filter(p=>canEditUnit(p.unitId) && ok.status!=='gesloten');
+  if(editableMissing.length>0){
+    addEl.innerHTML = `<div style="font-size:12px;color:var(--ink-dim);margin:10px 2px 6px;">Niet in deze opkomst — tik om toe te voegen:</div>
+      <div class="chiplist">${editableMissing.map(p=>`<button onclick="addToOpkomst('${p.id}')">+ ${esc(p.naam)}</button>`).join('')}</div>`;
+  } else addEl.innerHTML='';
+}
+function renderOpkomstUnitBlock(ok, unitId, locked){
+  const u = unitById(unitId);
+  if(!u) return '';
+  const direct = directPersonsOf(unitId).filter(p=>ok.aanwezigheid && ok.aanwezigheid[p.id]);
+  const editable = canEditUnit(unitId) && !locked;
+  let html = `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div><b>${esc(u.naam)}</b> <span class="tag">${esc(u.type||'')}</span></div>
+      <div style="font-family:var(--mono);font-size:12px;color:var(--khaki);">${rangCounts(allPersonsInSubtree(unitId).filter(p=>ok.aanwezigheid&&ok.aanwezigheid[p.id]), ok.aanwezigheid)}</div>
+    </div>`;
+  if(direct.length>0){
+    html += direct.map(p=>{
+      const a = ok.aanwezigheid[p.id];
+      const reasonHtml = (a.status==='afwezig' && a.reden) ? `<div class="reason-chip">${esc(a.reden)}</div>` : '';
+      return `<div class="row">
+        <div><div class="name">${esc(p.naam)} <span class="tag">${RANG_LABEL[p.rang]}</span></div>${reasonHtml}</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button class="status-btn ${a.status} ${editable?'':'locked'}" ${editable?`onclick="toggleStatus('${p.id}')"`:''}>${a.status==='aanwezig'?'Aanwezig':'Afwezig'}</button>
+          ${editable?`<button onclick="removeFromOpkomst('${p.id}')" style="background:none;border:none;color:var(--ink-dim);font-size:20px;padding:2px 4px;line-height:1;">&times;</button>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+  html += `</div>`;
+  childrenOf(unitId).forEach(c=>{ html += `<div style="margin-left:10px;">${renderOpkomstUnitBlock(ok, c.id, locked)}</div>`; });
+  return html;
+}
+function toggleStatus(personId){
+  const ok = getOpkomst();
+  if(ok.status==='gesloten') return;
+  const a = ok.aanwezigheid[personId];
+  const nieuw = {...ok.aanwezigheid};
+  if(a.status==='aanwezig'){
+    nieuw[personId] = {status:'afwezig', reden:null};
+    db.collection('opkomsten').doc(ok.id).update({aanwezigheid:nieuw}).then(()=>openReasonSheet(personId));
+  } else {
+    nieuw[personId] = {status:'aanwezig', reden:null};
+    db.collection('opkomsten').doc(ok.id).update({aanwezigheid:nieuw});
+  }
+}
+function removeFromOpkomst(personId){
+  const ok = getOpkomst();
+  const nieuw = {...ok.aanwezigheid}; delete nieuw[personId];
+  db.collection('opkomsten').doc(ok.id).update({aanwezigheid:nieuw});
+}
+function addToOpkomst(personId){
+  const ok = getOpkomst();
+  const nieuw = {...ok.aanwezigheid, [personId]: {status:'aanwezig', reden:null}};
+  db.collection('opkomsten').doc(ok.id).update({aanwezigheid:nieuw});
+}
+
+/* -------- reden-bodemblad -------- */
+let sheetPersonId = null; let sheetSelectedReason = null;
+function openReasonSheet(personId){
+  sheetPersonId = personId; sheetSelectedReason = null;
+  const overlay = document.createElement('div'); overlay.className='overlay'; overlay.id='reasonOverlay';
+  overlay.innerHTML = `<div class="sheet">
+    <h3>Reden van afwezigheid</h3>
+    <div class="chiplist" id="reasonChips">${redenen.map(r=>`<button onclick="pickReason('${escAttr(r)}')">${esc(r)}</button>`).join('')}</div>
+    <label>Andere reden</label><input type="text" id="customReason" placeholder="Typ een reden...">
+    <div class="radio-row">
+      <label><input type="radio" name="rtype" value="eenmalig" checked> Eenmalig gebruiken</label>
+      <label><input type="radio" name="rtype" value="vast"> Toevoegen aan lijst</label>
+    </div>
+    <button class="btn primary" onclick="confirmReason()">Opslaan</button>
+    <button class="btn ghost" onclick="closeOverlay('reasonOverlay')">Annuleren</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function pickReason(r){
+  sheetSelectedReason = r; document.getElementById('customReason').value='';
+  document.querySelectorAll('#reasonChips button').forEach(b=>b.classList.toggle('selected', b.textContent===r));
+}
+function confirmReason(){
+  const custom = document.getElementById('customReason').value.trim();
+  const type = document.querySelector('input[name=rtype]:checked').value;
+  const reden = custom || sheetSelectedReason;
+  if(!reden){ toast('Kies of typ een reden'); return; }
+  const ok = getOpkomst();
+  const nieuw = {...ok.aanwezigheid, [sheetPersonId]: {status:'afwezig', reden}};
+  db.collection('opkomsten').doc(ok.id).update({aanwezigheid:nieuw}).then(()=>{
+    if(custom && type==='vast' && !redenen.includes(custom)){
+      db.doc('instellingen/redenen').set({lijst: [...redenen, custom]}, {merge:true});
+    }
+    closeOverlay('reasonOverlay');
+  });
+}
+
+/* -------- opkomst-menu: afsluiten / verwijderen -------- */
+function showDetailMenu(){
+  const ok = getOpkomst();
+  const magAfsluiten = isAdmin() || canEditUnit(ok.scopeUnitId);
+  const overlay = document.createElement('div'); overlay.className='overlay'; overlay.id='menuOverlay';
+  overlay.innerHTML = `<div class="sheet">
+    <h3>Opkomst</h3>
+    ${magAfsluiten ? (ok.status==='open'
+      ? `<button class="btn primary" onclick="setOpkomstStatus('open')" style="display:none"></button><button class="btn ghost" onclick="closeOverlay('menuOverlay'); definitiefMaken()">Definitief maken (afsluiten)</button>`
+      : (isAdmin() ? `<button class="btn ghost" onclick="closeOverlay('menuOverlay'); heropenOpkomst()">Heropenen</button>` : '')) : ''}
+    ${(isAdmin() || ok.aangemaaktDoor===me.uid) ? `<button class="btn danger" onclick="closeOverlay('menuOverlay'); verwijderOpkomst()">Verwijder opkomst</button>` : ''}
+    <button class="btn ghost" onclick="closeOverlay('menuOverlay')">Sluiten</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function definitiefMaken(){
+  if(!confirm('Weet je zeker dat je deze opkomst definitief wilt maken? Bewerken kan daarna alleen nog via de systeembeheerder.')) return;
+  db.collection('opkomsten').doc(currentOpkomstId).update({status:'gesloten'});
+}
+function heropenOpkomst(){
+  db.collection('opkomsten').doc(currentOpkomstId).update({status:'open'});
+}
+function verwijderOpkomst(){
+  if(!confirm('Deze opkomst permanent verwijderen?')) return;
+  db.collection('opkomsten').doc(currentOpkomstId).delete().then(()=>{ currentOpkomstId=null; goTo('opkomsten'); });
+}
+
+/* -------- mail-overzicht -------- */
+function openMailSheet(){
+  const ok = getOpkomst();
+  const suggestie = (myProfile && myProfile.voorkeurEmail) || '';
+  const overlay = document.createElement('div'); overlay.className='overlay'; overlay.id='mailOverlay';
+  overlay.innerHTML = `<div class="sheet">
+    <h3>Overzicht mailen</h3>
+    <label>Naar e-mailadres</label>
+    <input type="email" id="mailTo" value="${escAttr(suggestie)}" placeholder="naam@voorbeeld.nl">
+    <button class="btn primary" id="mailSendBtn" onclick="sendOverzichtMail()">Verstuur</button>
+    <button class="btn ghost" onclick="closeOverlay('mailOverlay')">Annuleren</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function buildOverzichtTekst(ok){
+  const lines = [`Presentie: ${ok.naam} (${fmtDate(ok.datum)})`, `Eenheid: ${unitPath(ok.scopeUnitId)}`, ''];
+  function walk(unitId, depth){
+    const u = unitById(unitId); if(!u) return;
+    const indent = '  '.repeat(depth);
+    const direct = directPersonsOf(unitId).filter(p=>ok.aanwezigheid && ok.aanwezigheid[p.id]);
+    const subPersons = allPersonsInSubtree(unitId).filter(p=>ok.aanwezigheid && ok.aanwezigheid[p.id]);
+    lines.push(`${indent}${u.naam} — ${rangCounts(subPersons, ok.aanwezigheid)} (O/OO/M)`);
+    direct.forEach(p=>{
+      const a = ok.aanwezigheid[p.id];
+      lines.push(`${indent}  ${a.status==='aanwezig'?'✔':'✘'} ${p.naam} (${RANG_LABEL[p.rang]})${a.status==='afwezig' ? ' — ' + (a.reden||'geen reden') : ''}`);
+    });
+    childrenOf(unitId).forEach(c=>walk(c.id, depth+1));
+  }
+  walk(ok.scopeUnitId, 0);
+  return lines.join('\n');
+}
+function sendOverzichtMail(){
+  const to = document.getElementById('mailTo').value.trim();
+  if(!to){ toast('Vul een e-mailadres in'); return; }
+  const ok = getOpkomst();
+  const tekst = buildOverzichtTekst(ok);
+  const btn = document.getElementById('mailSendBtn');
+  btn.textContent = 'Versturen...'; btn.disabled = true;
+  emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+    to_email: to,
+    subject: `Presentie ${ok.naam} — ${fmtDate(ok.datum)}`,
+    message: tekst
+  }).then(()=>{
+    toast('Mail verstuurd naar ' + to);
+    closeOverlay('mailOverlay');
+  }).catch(e=>{
+    toast('Versturen mislukt: ' + (e.text||e.message||'onbekende fout'));
+    btn.textContent='Verstuur'; btn.disabled=false;
+  });
+}
+
+/* =========================================================
+   PERSONEEL
+   ========================================================= */
+function renderPersoneel(){
+  const el = document.getElementById('personeelUnits');
+  const editableUnits = isAdmin() ? units.map(u=>u.id) : myDirectUnitIds();
+  if(editableUnits.length===0){
+    el.innerHTML = `<div class="empty">Je beheert nog geen eenheid.<br>Vraag de systeembeheerder je toe te wijzen via Instellingen.</div>`;
+    return;
+  }
+  el.innerHTML = editableUnits.map(unitId=>{
+    const u = unitById(unitId); if(!u) return '';
+    const persons = directPersonsOf(unitId);
+    return `<div class="card">
+      <div style="font-weight:700;margin-bottom:6px;">${esc(unitPath(unitId))}</div>
+      ${persons.length===0 ? '<div class="empty" style="padding:14px 0;">Nog geen militairen.</div>' : persons.map(p=>`
+        <div class="row">
+          <div><div class="name">${esc(p.naam)}</div><div class="meta">${RANG_LABEL[p.rang]}</div></div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn small ghost" onclick="editPerson('${p.id}')">Wijzig</button>
+            <button class="btn small danger" onclick="removePerson('${p.id}')">Verwijder</button>
+          </div>
+        </div>`).join('')}
+      <button class="btn ghost" style="margin-top:10px;" onclick="openPersonSheet('${unitId}')">+ Militair toevoegen</button>
+    </div>`;
+  }).join('');
+}
+function openPersonSheet(unitId, personId){
+  const editing = personen.find(p=>p.id===personId);
+  const overlay = document.createElement('div'); overlay.className='overlay'; overlay.id='personOverlay';
+  overlay.innerHTML = `<div class="sheet">
+    <h3>${editing?'Militair wijzigen':'Militair toevoegen'}</h3>
+    <label>Naam</label><input type="text" id="personNaam" value="${escAttr(editing?editing.naam:'')}" placeholder="Bijv. Sld. Jansen">
+    <label>Rang</label>
+    <select id="personRang">
+      <option value="manschap" ${editing&&editing.rang==='manschap'?'selected':''}>Manschap</option>
+      <option value="onderofficier" ${editing&&editing.rang==='onderofficier'?'selected':''}>Onderofficier</option>
+      <option value="officier" ${editing&&editing.rang==='officier'?'selected':''}>Officier</option>
+    </select>
+    <button class="btn primary" onclick="savePerson('${unitId}','${personId||''}')">Opslaan</button>
+    <button class="btn ghost" onclick="closeOverlay('personOverlay')">Annuleren</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function editPerson(personId){ const p = personen.find(x=>x.id===personId); openPersonSheet(p.unitId, personId); }
+function savePerson(unitId, personId){
+  const naam = document.getElementById('personNaam').value.trim();
+  const rang = document.getElementById('personRang').value;
+  if(!naam){ toast('Vul een naam in'); return; }
+  const data = {naam, rang, unitId};
+  const p = personId ? db.collection('personen').doc(personId).set(data) : db.collection('personen').add(data);
+  p.then(()=>{ closeOverlay('personOverlay'); toast('Opgeslagen'); });
+}
+function removePerson(personId){
+  if(!confirm('Deze militair verwijderen? Historische opkomsten blijven bewaard.')) return;
+  db.collection('personen').doc(personId).delete();
+}
+
+/* =========================================================
+   STATISTIEKEN
+   ========================================================= */
+function initStatsDefaults(){
+  const to = new Date().toISOString().slice(0,10);
+  const from = new Date(Date.now() - 90*24*3600*1000).toISOString().slice(0,10);
+  if(!document.getElementById('statsFrom').value) document.getElementById('statsFrom').value = from;
+  if(!document.getElementById('statsTo').value) document.getElementById('statsTo').value = to;
+  renderStats();
+}
+function renderStats(){
+  const from = document.getElementById('statsFrom').value;
+  const to = document.getElementById('statsTo').value;
+  const scope = myManageableScopeUnitIds();
+  const relevante = opkomsten.filter(o=>o.datum>=from && o.datum<=to && (isAdmin() || scope.includes(o.scopeUnitId) || getAncestorChain(o.scopeUnitId).some(a=>scope.includes(a))));
+  const out = document.getElementById('statsOutput');
+  if(relevante.length===0){ out.innerHTML = `<div class="empty">Geen opkomsten in deze periode.</div>`; return; }
+
+  // per persoon tellen
+  const perPersoon = {}; // id -> {aanwezig, totaal, redenen:{}}
+  const perUnit = {}; // unitId -> {aanwezig, totaal}
+  relevante.forEach(ok=>{
+    Object.entries(ok.aanwezigheid||{}).forEach(([pid,a])=>{
+      const p = personen.find(x=>x.id===pid); if(!p) return;
+      perPersoon[pid] = perPersoon[pid] || {naam:p.naam, aanwezig:0, totaal:0, redenen:{}};
+      perPersoon[pid].totaal++;
+      if(a.status==='aanwezig') perPersoon[pid].aanwezig++;
+      else { const r = a.reden||'Onbekend'; perPersoon[pid].redenen[r] = (perPersoon[pid].redenen[r]||0)+1; }
+      perUnit[p.unitId] = perUnit[p.unitId] || {aanwezig:0, totaal:0};
+      perUnit[p.unitId].totaal++;
+      if(a.status==='aanwezig') perUnit[p.unitId].aanwezig++;
+    });
+  });
+  const totaalAanwezig = Object.values(perPersoon).reduce((s,x)=>s+x.aanwezig,0);
+  const totaalTotaal = Object.values(perPersoon).reduce((s,x)=>s+x.totaal,0);
+  const overallPct = totaalTotaal ? Math.round(100*totaalAanwezig/totaalTotaal) : 0;
+
+  const redenTotalen = {};
+  Object.values(perPersoon).forEach(p=>Object.entries(p.redenen).forEach(([r,n])=>{ redenTotalen[r]=(redenTotalen[r]||0)+n; }));
+  const topReden = Object.entries(redenTotalen).sort((a,b)=>b[1]-a[1])[0];
+
+  const unitRows = Object.entries(perUnit).map(([uid,v])=>({naam:unitPath(uid), pct: v.totaal?Math.round(100*v.aanwezig/v.totaal):0, ...v}))
+    .sort((a,b)=>a.pct-b.pct);
+  const laagsteUnit = unitRows[0];
+
+  let html = `<div class="summary">
+    <div class="box"><b>${relevante.length}</b><span>Opkomsten</span></div>
+    <div class="box ok"><b>${overallPct}%</b><span>Gem. aanwezig</span></div>
+    <div class="box absent"><b>${laagsteUnit?laagsteUnit.pct+'%':'—'}</b><span>Laagste eenheid</span></div>
+  </div>`;
+  if(topReden) html += `<div class="card" style="font-size:13px;color:var(--ink-dim);">Meest voorkomende afwezigheidsreden: <b style="color:var(--ink);">${esc(topReden[0])}</b> (${topReden[1]}×)</div>`;
+
+  html += `<h3 style="font-size:14px;color:var(--khaki);margin:18px 0 8px;">Per eenheid</h3>`;
+  unitRows.forEach(r=>{
+    html += `<div class="statbar-wrap"><div class="statbar-label"><span>${esc(r.naam)}</span><span>${r.pct}%</span></div>
+      <div class="statbar-track"><div class="statbar-fill" style="width:${r.pct}%;"></div></div></div>`;
+  });
+
+  html += `<h3 style="font-size:14px;color:var(--khaki);margin:18px 0 8px;">Per persoon</h3>`;
+  Object.values(perPersoon).sort((a,b)=> (a.totaal?a.aanwezig/a.totaal:0) - (b.totaal?b.aanwezig/b.totaal:0)).forEach(p=>{
+    const pct = p.totaal ? Math.round(100*p.aanwezig/p.totaal) : 0;
+    html += `<div class="statbar-wrap"><div class="statbar-label"><span>${esc(p.naam)}</span><span>${pct}% (${p.aanwezig}/${p.totaal})</span></div>
+      <div class="statbar-track"><div class="statbar-fill" style="width:${pct}%;"></div></div></div>`;
+  });
+  out.innerHTML = html;
+}
+
+/* =========================================================
+   INSTELLINGEN
+   ========================================================= */
+function renderInstellingen(){
+  const el = document.getElementById('instellingenContent');
+  let html = `<div class="card">
+    <div style="font-weight:700;margin-bottom:8px;">Mijn voorkeuren</div>
+    <label>Voorkeur e-mailadres voor rapportages</label>
+    <input type="email" id="voorkeurEmailInput" value="${escAttr(myProfile?.voorkeurEmail||'')}" placeholder="naam@voorbeeld.nl">
+    <button class="btn ghost" onclick="saveVoorkeurEmail()">Opslaan</button>
+    <button class="btn ghost" style="margin-top:20px;color:var(--absent);border-color:var(--absent);" onclick="logout()">Uitloggen</button>
+  </div>`;
+
+  if(isAdmin()){
+    html += `<div class="card">
+      <div style="font-weight:700;margin-bottom:8px;">Organisatie</div>
+      <div id="orgTree"></div>
+      <button class="btn ghost" onclick="openUnitSheet(null)">+ Eenheid toevoegen</button>
+    </div>`;
+    html += `<div class="card">
+      <div style="font-weight:700;margin-bottom:8px;">Gebruikers &amp; rollen</div>
+      <div id="userList"></div>
+      <button class="btn ghost" onclick="openNewUserSheet()">+ Nieuwe beheerder aanmaken</button>
+    </div>`;
+    html += `<div class="card">
+      <div style="font-weight:700;margin-bottom:8px;">Redenen afwezigheid</div>
+      <div id="redenenList" class="chiplist"></div>
+      <input type="text" id="nieuweRedenInput" placeholder="Nieuwe reden...">
+      <button class="btn ghost" onclick="addGlobalReden()">Toevoegen</button>
+    </div>`;
+    html += `<div class="card">
+      <div style="font-weight:700;margin-bottom:8px;">Open / gesloten opkomsten</div>
+      <div id="opkomstStatusList"></div>
+    </div>`;
+  }
+  el.innerHTML = html;
+  if(isAdmin()){
+    renderOrgTree();
+    renderUserList();
+    renderRedenenList();
+    renderOpkomstStatusList();
+  }
+}
+function saveVoorkeurEmail(){
+  const val = document.getElementById('voorkeurEmailInput').value.trim();
+  db.collection('users').doc(me.uid).set({voorkeurEmail: val}, {merge:true}).then(()=>toast('Opgeslagen'));
+}
+
+/* -------- organisatieboom (admin) -------- */
+function renderOrgTree(){
+  const el = document.getElementById('orgTree');
+  function walk(parentId, depth){
+    return childrenOf(parentId).map(u=>{
+      const beheerderNamen = (u.beheerders||[]).map(uid=>allUsers.find(x=>x.id===uid)?.email || uid).join(', ') || '—';
+      return `<div class="unit-node">
+        <div class="unit-head">
+          <div><span class="unit-name">${esc(u.naam)}</span> <span class="unit-type">${esc(u.type||'')}</span>
+            <div style="font-size:11px;color:var(--ink-dim);">Beheerder(s): ${esc(beheerderNamen)}</div>
+          </div>
+          <div style="display:flex;gap:4px;">
+            <button class="btn small ghost" onclick="openUnitSheet('${u.id}')">Wijzig</button>
+            <button class="btn small danger" onclick="deleteUnit('${u.id}')">Verwijder</button>
+          </div>
+        </div>
+        <div class="unit-children">${walk(u.id, depth+1).join('')}</div>
+      </div>`;
+    });
+  }
+  const html = walk(null,0).join('');
+  el.innerHTML = html || `<div class="empty" style="padding:14px 0;">Nog geen eenheden. Begin met de bovenste (bijv. peloton).</div>`;
+}
+function openUnitSheet(unitId){
+  const editing = unitById(unitId);
+  const overlay = document.createElement('div'); overlay.className='overlay'; overlay.id='unitOverlay';
+  overlay.innerHTML = `<div class="sheet">
+    <h3>${editing?'Eenheid wijzigen':'Nieuwe eenheid'}</h3>
+    <label>Naam</label><input type="text" id="unitNaam" value="${escAttr(editing?editing.naam:'')}" placeholder="Bijv. 2e Peloton">
+    <label>Type (vrij label)</label><input type="text" id="unitType" value="${escAttr(editing?editing.type||'':'')}" placeholder="peloton / groep / compagnie...">
+    <label>Bovenliggende eenheid</label>
+    <select id="unitParent">
+      <option value="">— Geen (hoogste niveau) —</option>
+      ${units.filter(u=>u.id!==unitId).map(u=>`<option value="${u.id}" ${editing&&editing.parentId===u.id?'selected':''}>${esc(unitPath(u.id))}</option>`).join('')}
+    </select>
+    <label>Beheerder(s)</label>
+    <div id="unitBeheerdersWrap" style="border:1px solid var(--line);border-radius:10px;padding:4px 12px;max-height:26vh;overflow-y:auto;">
+      ${allUsers.map(u=>`<label style="display:flex;align-items:center;gap:8px;padding:7px 0;font-size:13px;">
+        <input type="checkbox" class="unitBeheerderCheck" value="${u.id}" style="width:auto;" ${editing&&(editing.beheerders||[]).includes(u.id)?'checked':''}> ${esc(u.email)}
+      </label>`).join('') || '<div class="empty" style="padding:10px 0;">Nog geen gebruikers aangemaakt.</div>'}
+    </div>
+    <button class="btn primary" onclick="saveUnit('${unitId||''}')">Opslaan</button>
+    <button class="btn ghost" onclick="closeOverlay('unitOverlay')">Annuleren</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function saveUnit(unitId){
+  const naam = document.getElementById('unitNaam').value.trim();
+  const type = document.getElementById('unitType').value.trim();
+  const parentId = document.getElementById('unitParent').value || null;
+  const beheerders = Array.from(document.querySelectorAll('.unitBeheerderCheck:checked')).map(c=>c.value);
+  if(!naam){ toast('Vul een naam in'); return; }
+  if(parentId===unitId){ toast('Een eenheid kan niet zijn eigen bovenliggende eenheid zijn'); return; }
+  const data = {naam, type, parentId, beheerders};
+  const p = unitId ? db.collection('units').doc(unitId).set(data,{merge:true}) : db.collection('units').add(data);
+  p.then(()=>{ closeOverlay('unitOverlay'); toast('Opgeslagen'); });
+}
+function deleteUnit(unitId){
+  if(childrenOf(unitId).length>0){ toast('Verwijder eerst de onderliggende eenheden'); return; }
+  if(directPersonsOf(unitId).length>0){ toast('Verwijder of verplaats eerst de militairen in deze eenheid'); return; }
+  if(!confirm('Deze eenheid verwijderen?')) return;
+  db.collection('units').doc(unitId).delete();
+}
+
+/* -------- gebruikers & rollen (admin) -------- */
+function renderUserList(){
+  const el = document.getElementById('userList');
+  el.innerHTML = allUsers.map(u=>`
+    <div class="row">
+      <div><div class="name">${esc(u.email)}</div><div class="meta">${esc(u.naam||'')}</div></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="tag ${u.rol==='admin'?'role-admin':''}">${u.rol==='admin'?'admin':'beheerder'}</span>
+        <button class="btn small ghost" onclick="toggleAdmin('${u.id}','${u.rol}')">${u.rol==='admin'?'Maak beheerder':'Maak admin'}</button>
+      </div>
+    </div>`).join('');
+}
+function toggleAdmin(uid, huidigeRol){
+  const nieuweRol = huidigeRol==='admin' ? 'beheerder' : 'admin';
+  if(!confirm(`Rol van deze gebruiker wijzigen naar "${nieuweRol}"?`)) return;
+  db.collection('users').doc(uid).set({rol:nieuweRol},{merge:true});
+}
+function openNewUserSheet(){
+  const overlay = document.createElement('div'); overlay.className='overlay'; overlay.id='newUserOverlay';
+  overlay.innerHTML = `<div class="sheet">
+    <h3>Nieuwe beheerder aanmaken</h3>
+    <label>Naam</label><input type="text" id="newUserNaam" placeholder="Bijv. Sgt. De Vries">
+    <label>E-mailadres</label><input type="email" id="newUserEmail" placeholder="naam@voorbeeld.nl">
+    <label>Tijdelijk wachtwoord</label><input type="text" id="newUserPass" placeholder="Minimaal 6 tekens">
+    <div style="font-size:12px;color:var(--ink-dim);margin-top:8px;">Geef dit wachtwoord door aan de betreffende persoon. Diegene kan het later zelf wijzigen via "Wachtwoord vergeten" op het inlogscherm.</div>
+    <button class="btn primary" onclick="createNewUser()">Aanmaken</button>
+    <button class="btn ghost" onclick="closeOverlay('newUserOverlay')">Annuleren</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function createNewUser(){
+  const naam = document.getElementById('newUserNaam').value.trim();
+  const email = document.getElementById('newUserEmail').value.trim();
+  const pass = document.getElementById('newUserPass').value;
+  if(!email || pass.length<6){ toast('Vul een e-mailadres en wachtwoord (min. 6 tekens) in'); return; }
+  secondaryApp.auth().createUserWithEmailAndPassword(email, pass).then(cred=>{
+    const uid = cred.user.uid;
+    return db.collection('users').doc(uid).set({email, naam: naam||email.split('@')[0], rol:'beheerder', voorkeurEmail:''})
+      .then(()=>secondaryApp.auth().signOut());
+  }).then(()=>{ closeOverlay('newUserOverlay'); toast('Gebruiker aangemaakt'); })
+    .catch(e=>toast('Fout: '+e.message));
+}
+
+/* -------- redenen (admin) -------- */
+function renderRedenenList(){
+  const el = document.getElementById('redenenList');
+  el.innerHTML = redenen.map(r=>`<button onclick="removeGlobalReden('${escAttr(r)}')">${esc(r)} ✕</button>`).join('') || '<span style="color:var(--ink-dim);font-size:13px;">Nog geen redenen.</span>';
+}
+function addGlobalReden(){
+  const input = document.getElementById('nieuweRedenInput');
+  const val = input.value.trim();
+  if(!val) return;
+  if(redenen.includes(val)){ toast('Staat al in de lijst'); return; }
+  db.doc('instellingen/redenen').set({lijst:[...redenen, val]}, {merge:true}).then(()=>{ input.value=''; toast('Toegevoegd'); });
+}
+function removeGlobalReden(r){
+  db.doc('instellingen/redenen').set({lijst: redenen.filter(x=>x!==r)}, {merge:true});
+}
+
+/* -------- open/gesloten opkomsten (admin) -------- */
+function renderOpkomstStatusList(){
+  const el = document.getElementById('opkomstStatusList');
+  const sorted = opkomsten.slice().sort((a,b)=>(b.datum||'').localeCompare(a.datum||''));
+  el.innerHTML = sorted.map(o=>`
+    <div class="row">
+      <div><div class="name">${esc(o.naam)}</div><div class="meta">${fmtDate(o.datum)} · ${esc(unitPath(o.scopeUnitId))}</div></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="tag ${o.status==='gesloten'?'role-admin':''}">${o.status}</span>
+        <button class="btn small ghost" onclick="db.collection('opkomsten').doc('${o.id}').update({status: '${o.status==='open'?'gesloten':'open'}'})">${o.status==='open'?'Sluit':'Heropen'}</button>
+      </div>
+    </div>`).join('') || '<div class="empty">Nog geen opkomsten.</div>';
+}
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+function esc(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escAttr(s){ return String(s??'').replace(/"/g,'&quot;'); }
+function fmtDate(d){ if(!d) return ''; const dt = new Date(d+'T00:00:00'); return dt.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short',year:'numeric'}); }
+</script>
+</body>
+</html>
