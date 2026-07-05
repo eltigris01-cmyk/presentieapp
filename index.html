@@ -279,25 +279,25 @@ function attachListeners(){
     myProfile = s.data();
     renderHeaderRole();
     rerenderCurrentScreen();
-  }));
+  }, err=>toast('Fout (profiel): '+err.message)));
   unsubs.push(db.collection('units').onSnapshot(s=>{
     units = s.docs.map(d=>({id:d.id, ...d.data()}));
     rerenderCurrentScreen();
-  }));
+  }, err=>toast('Fout (eenheden): '+err.message)));
   unsubs.push(db.collection('personen').onSnapshot(s=>{
     personen = s.docs.map(d=>({id:d.id, ...d.data()}));
     rerenderCurrentScreen();
-  }));
+  }, err=>toast('Fout (personen): '+err.message)));
   unsubs.push(db.collection('opkomsten').onSnapshot(s=>{
     opkomsten = s.docs.map(d=>({id:d.id, ...d.data()}));
     rerenderCurrentScreen();
-  }));
+  }, err=>toast('Fout (opkomsten): '+err.message)));
   unsubs.push(db.doc('instellingen/redenen').onSnapshot(s=>{
     redenen = (s.exists && s.data().lijst) ? s.data().lijst : [];
-  }));
+  }, err=>toast('Fout (redenen): '+err.message)));
   unsubs.push(db.collection('users').onSnapshot(s=>{
     allUsers = s.docs.map(d=>({id:d.id, ...d.data()}));
-  }));
+  }, err=>toast('Fout (gebruikers): '+err.message)));
 }
 function rerenderCurrentScreen(){
   if(currentTab==='opkomsten' && !currentOpkomstId) renderOpkomsten();
