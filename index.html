@@ -11,7 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 
 <style>
   :root{
@@ -188,7 +188,7 @@ const db = firebase.firestore();
 // tweede, losse app-instantie zodat admin nieuwe gebruikers kan aanmaken
 // zonder zelf uitgelogd te raken
 const secondaryApp = firebase.initializeApp(firebaseConfig, "secondary");
-try{ emailjs.init({publicKey: EMAILJS_PUBLIC_KEY}); }catch(e){}
+emailjs.init({publicKey: EMAILJS_PUBLIC_KEY});
 
 /* =========================================================
    STATE
