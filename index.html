@@ -747,8 +747,7 @@ function initStatsDefaults(){
 function renderStats(){
   const from = document.getElementById('statsFrom').value;
   const to = document.getElementById('statsTo').value;
-  const scope = myManageableScopeUnitIds();
-  const relevante = opkomsten.filter(o=>o.datum>=from && o.datum<=to && (isAdmin() || scope.includes(o.scopeUnitId) || getAncestorChain(o.scopeUnitId).some(a=>scope.includes(a))));
+  const relevante = opkomsten.filter(o=>o.datum>=from && o.datum<=to); // alle beheerders mogen bij elkaar meekijken
   const out = document.getElementById('statsOutput');
   if(relevante.length===0){ out.innerHTML = `<div class="empty">Geen opkomsten in deze periode.</div>`; return; }
 
