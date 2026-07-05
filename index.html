@@ -115,8 +115,13 @@
 <!-- APP -->
 <div id="appRoot" style="display:none;">
 <header>
-  <div class="eyebrow" id="headerEyebrow">PRESENTIE</div>
-  <h1 id="headerTitle">Opkomsten</h1>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <img id="headerLogo" src="logo.png" alt="" style="height:36px;width:36px;object-fit:contain;border-radius:8px;display:none;" onload="this.style.display='block'" onerror="this.style.display='none'">
+    <div>
+      <div class="eyebrow" id="headerEyebrow">PRESENTIE</div>
+      <h1 id="headerTitle">Opkomsten</h1>
+    </div>
+  </div>
   <div class="sub" id="headerSub">&nbsp;</div>
 </header>
 
@@ -393,8 +398,7 @@ function rangTotalLabel(personsList){
    ========================================================= */
 function renderOpkomsten(){
   const el = document.getElementById('opkomstenList');
-  const scope = myManageableScopeUnitIds();
-  const zichtbaar = opkomsten.filter(o=>scope.includes(o.scopeUnitId) || isAdmin() || getAncestorChain(o.scopeUnitId).some(a=>scope.includes(a)));
+  const zichtbaar = opkomsten; // alle beheerders mogen bij elkaar meekijken
   if(zichtbaar.length===0){
     el.innerHTML = `<div class="empty"><span class="big">🪖</span>Nog geen opkomst.<br>Tik op + om te beginnen.</div>`;
     return;
@@ -484,17 +488,27 @@ function renderDetail(){
     <div class="box"><b>${rangCounts(allPersonsHere, ok.aanwezigheid)}</b><span>O/OO/M aanw.</span></div>`;
 
   const treeEl = document.getElementById('detailTree');
-  treeEl.innerHTML = renderOpkomstUnitBlock(ok, ok.scopeUnitId, ok.status==='gesloten');
+  treeEl.innerHTML = rootUnits()
+    .filter(r=>unitHasRelevantAanwezigheid(ok, r.id))
+    .map(r=>renderOpkomstUnitBlock(ok, r.id, ok.status==='gesloten'))
+    .join('') || `<div class="empty">Nog geen militairen in deze opkomst.</div>`;
 
-  const scopeAll = getSubtreeUnitIds(ok.scopeUnitId);
-  const inScopePersons = personen.filter(p=>scopeAll.includes(p.unitId));
-  const missing = inScopePersons.filter(p=>!ok.aanwezigheid || !ok.aanwezigheid[p.id]);
+  // "toevoegen" mag voor elke eenheid die ikzelf beheer, ongeacht op welk
+  // niveau de opkomst oorspronkelijk is aangemaakt — zo kan een andere groep
+  // altijd nog aansluiten bij een al bestaande, gedeelde opkomst
+  const myUnits = isAdmin() ? units.map(u=>u.id) : myDirectUnitIds();
+  const missing = [];
+  myUnits.forEach(uid=>{
+    directPersonsOf(uid).forEach(p=>{ if(!ok.aanwezigheid || !ok.aanwezigheid[p.id]) missing.push(p); });
+  });
   const addEl = document.getElementById('detailAddMissing');
-  const editableMissing = missing.filter(p=>canEditUnit(p.unitId) && ok.status!=='gesloten');
-  if(editableMissing.length>0){
-    addEl.innerHTML = `<div style="font-size:12px;color:var(--ink-dim);margin:10px 2px 6px;">Niet in deze opkomst — tik om toe te voegen:</div>
-      <div class="chiplist">${editableMissing.map(p=>`<button onclick="addToOpkomst('${p.id}')">+ ${esc(p.naam)}</button>`).join('')}</div>`;
+  if(ok.status!=='gesloten' && missing.length>0){
+    addEl.innerHTML = `<div style="font-size:12px;color:var(--ink-dim);margin:10px 2px 6px;">Niet in deze opkomst — tik om je eigen militair(en) toe te voegen:</div>
+      <div class="chiplist">${missing.map(p=>`<button onclick="addToOpkomst('${p.id}')">+ ${esc(p.naam)} (${esc(unitById(p.unitId)?.naam||'')})</button>`).join('')}</div>`;
   } else addEl.innerHTML='';
+}
+function unitHasRelevantAanwezigheid(ok, unitId){
+  return allPersonsInSubtree(unitId).some(p=>ok.aanwezigheid && ok.aanwezigheid[p.id]);
 }
 function renderOpkomstUnitBlock(ok, unitId, locked){
   const u = unitById(unitId);
@@ -520,7 +534,7 @@ function renderOpkomstUnitBlock(ok, unitId, locked){
     }).join('');
   }
   html += `</div>`;
-  childrenOf(unitId).forEach(c=>{ html += `<div style="margin-left:10px;">${renderOpkomstUnitBlock(ok, c.id, locked)}</div>`; });
+  childrenOf(unitId).forEach(c=>{ if(unitHasRelevantAanwezigheid(ok, c.id)) html += `<div style="margin-left:10px;">${renderOpkomstUnitBlock(ok, c.id, locked)}</div>`; });
   return html;
 }
 function toggleStatus(personId){
