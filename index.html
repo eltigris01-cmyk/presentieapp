@@ -151,6 +151,7 @@
     <label>tot en met</label>
     <input type="date" id="statsTo">
     <button class="btn primary" onclick="renderStats()">Bereken</button>
+    <button class="btn ghost" onclick="openStatsMailSheet()">📧 Mail statistieken</button>
     <div id="statsOutput" style="margin-top:16px;"></div>
   </section>
 
@@ -744,26 +745,27 @@ function initStatsDefaults(){
   if(!document.getElementById('statsTo').value) document.getElementById('statsTo').value = to;
   renderStats();
 }
-function renderStats(){
-  const from = document.getElementById('statsFrom').value;
-  const to = document.getElementById('statsTo').value;
-  const relevante = opkomsten.filter(o=>o.datum>=from && o.datum<=to); // alle beheerders mogen bij elkaar meekijken
-  const out = document.getElementById('statsOutput');
-  if(relevante.length===0){ out.innerHTML = `<div class="empty">Geen opkomsten in deze periode.</div>`; return; }
-
-  // per persoon tellen
-  const perPersoon = {}; // id -> {aanwezig, totaal, redenen:{}}
-  const perUnit = {}; // unitId -> {aanwezig, totaal}
+function computeStatsData(from, to){
+  const relevante = opkomsten.filter(o=>o.datum>=from && o.datum<=to);
+  const perPersoon = {}; // id -> {naam, unitId, aanwezig, totaal, redenen:{}}
+  const perUnit = {};    // unitId -> {aanwezig, totaal}
+  const perUnitReden = {}; // unitId -> {reden: aantal}
   relevante.forEach(ok=>{
     Object.entries(ok.aanwezigheid||{}).forEach(([pid,a])=>{
       const p = personen.find(x=>x.id===pid); if(!p) return;
-      perPersoon[pid] = perPersoon[pid] || {naam:p.naam, aanwezig:0, totaal:0, redenen:{}};
+      perPersoon[pid] = perPersoon[pid] || {naam:p.naam, unitId:p.unitId, aanwezig:0, totaal:0, redenen:{}};
       perPersoon[pid].totaal++;
-      if(a.status==='aanwezig') perPersoon[pid].aanwezig++;
-      else { const r = a.reden||'Onbekend'; perPersoon[pid].redenen[r] = (perPersoon[pid].redenen[r]||0)+1; }
       perUnit[p.unitId] = perUnit[p.unitId] || {aanwezig:0, totaal:0};
       perUnit[p.unitId].totaal++;
-      if(a.status==='aanwezig') perUnit[p.unitId].aanwezig++;
+      if(a.status==='aanwezig'){
+        perPersoon[pid].aanwezig++;
+        perUnit[p.unitId].aanwezig++;
+      } else {
+        const r = a.reden || 'Onbekend';
+        perPersoon[pid].redenen[r] = (perPersoon[pid].redenen[r]||0)+1;
+        perUnitReden[p.unitId] = perUnitReden[p.unitId] || {};
+        perUnitReden[p.unitId][r] = (perUnitReden[p.unitId][r]||0)+1;
+      }
     });
   });
   const totaalAanwezig = Object.values(perPersoon).reduce((s,x)=>s+x.aanwezig,0);
@@ -774,30 +776,108 @@ function renderStats(){
   Object.values(perPersoon).forEach(p=>Object.entries(p.redenen).forEach(([r,n])=>{ redenTotalen[r]=(redenTotalen[r]||0)+n; }));
   const topReden = Object.entries(redenTotalen).sort((a,b)=>b[1]-a[1])[0];
 
-  const unitRows = Object.entries(perUnit).map(([uid,v])=>({naam:unitPath(uid), pct: v.totaal?Math.round(100*v.aanwezig/v.totaal):0, ...v}))
+  const unitRows = Object.entries(perUnit).map(([uid,v])=>({unitId:uid, naam:unitPath(uid), pct: v.totaal?Math.round(100*v.aanwezig/v.totaal):0, ...v}))
     .sort((a,b)=>a.pct-b.pct);
   const laagsteUnit = unitRows[0];
 
+  return {from, to, relevante, perPersoon, perUnit, perUnitReden, totaalAanwezig, totaalTotaal, overallPct, redenTotalen, topReden, unitRows, laagsteUnit};
+}
+
+function renderStats(){
+  const from = document.getElementById('statsFrom').value;
+  const to = document.getElementById('statsTo').value;
+  const out = document.getElementById('statsOutput');
+  const d = computeStatsData(from, to);
+  if(d.relevante.length===0){ out.innerHTML = `<div class="empty">Geen opkomsten in deze periode.</div>`; return; }
+
   let html = `<div class="summary">
-    <div class="box"><b>${relevante.length}</b><span>Opkomsten</span></div>
-    <div class="box ok"><b>${overallPct}%</b><span>Gem. aanwezig</span></div>
-    <div class="box absent"><b>${laagsteUnit?laagsteUnit.pct+'%':'—'}</b><span>Laagste eenheid</span></div>
+    <div class="box"><b>${d.relevante.length}</b><span>Opkomsten</span></div>
+    <div class="box ok"><b>${d.overallPct}%</b><span>Gem. aanwezig</span></div>
+    <div class="box absent"><b>${d.laagsteUnit?d.laagsteUnit.pct+'%':'—'}</b><span>Laagste eenheid</span></div>
   </div>`;
-  if(topReden) html += `<div class="card" style="font-size:13px;color:var(--ink-dim);">Meest voorkomende afwezigheidsreden: <b style="color:var(--ink);">${esc(topReden[0])}</b> (${topReden[1]}×)</div>`;
+  if(d.topReden) html += `<div class="card" style="font-size:13px;color:var(--ink-dim);">Meest voorkomende afwezigheidsreden: <b style="color:var(--ink);">${esc(d.topReden[0])}</b> (${d.topReden[1]}×)</div>`;
 
   html += `<h3 style="font-size:14px;color:var(--khaki);margin:18px 0 8px;">Per eenheid</h3>`;
-  unitRows.forEach(r=>{
+  d.unitRows.forEach(r=>{
     html += `<div class="statbar-wrap"><div class="statbar-label"><span>${esc(r.naam)}</span><span>${r.pct}%</span></div>
       <div class="statbar-track"><div class="statbar-fill" style="width:${r.pct}%;"></div></div></div>`;
   });
 
+  html += `<h3 style="font-size:14px;color:var(--khaki);margin:18px 0 8px;">Redenen per eenheid</h3>`;
+  d.unitRows.forEach(r=>{
+    const redenen = d.perUnitReden[r.unitId];
+    if(!redenen) return;
+    const chips = Object.entries(redenen).sort((a,b)=>b[1]-a[1]).map(([reden,n])=>`<button style="pointer-events:none;">${esc(reden)}: ${n}</button>`).join('');
+    html += `<div class="card"><div style="font-weight:600;margin-bottom:6px;">${esc(r.naam)}</div><div class="chiplist">${chips}</div></div>`;
+  });
+
   html += `<h3 style="font-size:14px;color:var(--khaki);margin:18px 0 8px;">Per persoon</h3>`;
-  Object.values(perPersoon).sort((a,b)=> (a.totaal?a.aanwezig/a.totaal:0) - (b.totaal?b.aanwezig/b.totaal:0)).forEach(p=>{
+  Object.values(d.perPersoon).sort((a,b)=> (a.totaal?a.aanwezig/a.totaal:0) - (b.totaal?b.aanwezig/b.totaal:0)).forEach(p=>{
     const pct = p.totaal ? Math.round(100*p.aanwezig/p.totaal) : 0;
     html += `<div class="statbar-wrap"><div class="statbar-label"><span>${esc(p.naam)}</span><span>${pct}% (${p.aanwezig}/${p.totaal})</span></div>
       <div class="statbar-track"><div class="statbar-fill" style="width:${pct}%;"></div></div></div>`;
   });
   out.innerHTML = html;
+}
+
+/* -------- statistieken mailen -------- */
+function buildStatsOverzichtTekst(){
+  const from = document.getElementById('statsFrom').value;
+  const to = document.getElementById('statsTo').value;
+  const d = computeStatsData(from, to);
+  const lines = [`Presentiestatistieken van ${fmtDate(from)} t/m ${fmtDate(to)}`, ''];
+  lines.push(`Aantal opkomsten: ${d.relevante.length}`);
+  lines.push(`Gemiddelde aanwezigheid: ${d.overallPct}%`);
+  if(d.topReden) lines.push(`Meest voorkomende reden: ${d.topReden[0]} (${d.topReden[1]}x)`);
+  lines.push('', '== Per eenheid ==');
+  d.unitRows.forEach(r=>{
+    lines.push(`${r.naam}: ${r.pct}% (${r.aanwezig}/${r.totaal})`);
+    const redenen = d.perUnitReden[r.unitId];
+    if(redenen){
+      Object.entries(redenen).sort((a,b)=>b[1]-a[1]).forEach(([reden,n])=>lines.push(`  - ${reden}: ${n}`));
+    }
+  });
+  lines.push('', '== Per persoon ==');
+  Object.values(d.perPersoon).sort((a,b)=>(a.totaal?a.aanwezig/a.totaal:0)-(b.totaal?b.aanwezig/b.totaal:0)).forEach(p=>{
+    const pct = p.totaal ? Math.round(100*p.aanwezig/p.totaal) : 0;
+    lines.push(`${p.naam}: ${pct}% (${p.aanwezig}/${p.totaal})`);
+  });
+  return lines.join('\n');
+}
+function openStatsMailSheet(){
+  const from = document.getElementById('statsFrom').value;
+  const to = document.getElementById('statsTo').value;
+  if(!from || !to){ toast('Kies eerst een periode en klik Bereken'); return; }
+  const suggestie = (myProfile && myProfile.voorkeurEmail) || '';
+  const overlay = document.createElement('div'); overlay.className='overlay'; overlay.id='statsMailOverlay';
+  overlay.innerHTML = `<div class="sheet">
+    <h3>Statistieken mailen</h3>
+    <label>Naar e-mailadres</label>
+    <input type="email" id="statsMailTo" value="${escAttr(suggestie)}" placeholder="naam@voorbeeld.nl">
+    <button class="btn primary" id="statsMailSendBtn" onclick="sendStatsMail()">Verstuur</button>
+    <button class="btn ghost" onclick="closeOverlay('statsMailOverlay')">Annuleren</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function sendStatsMail(){
+  const to = document.getElementById('statsMailTo').value.trim();
+  if(!to){ toast('Vul een e-mailadres in'); return; }
+  const tekst = buildStatsOverzichtTekst();
+  const from = document.getElementById('statsFrom').value;
+  const tot = document.getElementById('statsTo').value;
+  const btn = document.getElementById('statsMailSendBtn');
+  btn.textContent = 'Versturen...'; btn.disabled = true;
+  emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+    to_email: to,
+    subject: `Presentiestatistieken ${fmtDate(from)} t/m ${fmtDate(tot)}`,
+    message: tekst
+  }).then(()=>{
+    toast('Mail verstuurd naar ' + to);
+    closeOverlay('statsMailOverlay');
+  }).catch(e=>{
+    toast('Versturen mislukt: ' + (e.text||e.message||'onbekende fout'));
+    btn.textContent='Verstuur'; btn.disabled=false;
+  });
 }
 
 /* =========================================================
